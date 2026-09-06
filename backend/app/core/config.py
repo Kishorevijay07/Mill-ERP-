@@ -65,6 +65,11 @@ class Settings(BaseSettings):
     s3_secret_key: str = "minioadmin"
     s3_use_path_style: bool = True
 
+    # ---- Document storage ----
+    # Backend for stored files: "local" (dev, on-disk) or "s3" (future).
+    document_storage_backend: str = "local"
+    document_storage_dir: str = "./document_storage"
+
     # ---- Observability ----
     sentry_dsn: str | None = None
 
@@ -90,7 +95,14 @@ class Settings(BaseSettings):
         discrete Postgres settings using the psycopg (v3) driver.
         """
         if self.database_url is not None:
-            return str(self.database_url)
+            url = str(self.database_url)
+            # Normalise bare libpq schemes (as emitted by managed Postgres such as
+            # Neon/Heroku) to the psycopg (v3) driver this project ships. Without
+            # this, SQLAlchemy defaults to psycopg2, which is not a dependency.
+            for prefix in ("postgresql://", "postgres://"):
+                if url.startswith(prefix):
+                    return "postgresql+psycopg://" + url[len(prefix) :]
+            return url
         return (
             f"postgresql+psycopg://{self.postgres_user}:{self.postgres_password}"
             f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"

@@ -97,6 +97,106 @@ Roles: **ADMIN** (all permissions), **OWNER** (operations, approvals, billing,
 payments), **STAFF** (day-to-day operations). Authorization is enforced
 server-side via a permission guard on every protected endpoint.
 
+### Government receiving API (Stage 2)
+
+Chain: **Agency → Allocation → Delivery Order → Government Load**. Every mutation
+allocates a human-readable reference (`AL-`, `DO-`, `LD-…`), stamps the acting
+user, and writes an audit entry — atomically.
+
+| Method | Path | Permission |
+|--------|------|-----------|
+| `POST`/`GET` | `/api/v1/government-agencies` | `government.agency.manage` / `.view` |
+| `POST`/`GET` | `/api/v1/allocations` | `government.allocation.manage` / `.view` |
+| `POST`/`GET` | `/api/v1/delivery-orders` | `government.delivery_order.manage` / `.view` |
+| `POST`/`GET` | `/api/v1/government-loads` | `government.load.create` / `.view` |
+| `POST` | `/api/v1/government-loads/{id}/arrive` | `government.load.create` (DRAFT → ARRIVED) |
+
+### Receiving: weighment → QC → accept (Stage 2b)
+
+Completes the load state machine and produces the first paddy stock. Acceptance is
+the **only** way paddy inventory is created — via an inventory transaction, never a
+direct stock edit.
+
+| Method | Path | Permission | Transition |
+|--------|------|-----------|-----------|
+| `POST` | `/api/v1/government-loads/{id}/weighments` | `receiving.weighment.record` | `ARRIVED → WEIGHED` (net = gross − tare) |
+| `POST` | `/api/v1/government-loads/{id}/paddy-quality` | `receiving.paddy_quality.record` | `WEIGHED → QC_PENDING` |
+| `POST` | `/api/v1/government-loads/{id}/accept` | `government.load.accept` | `QC_PENDING → ACCEPTED` (+ Paddy Lot `PL-…` + inventory receipt) |
+| `POST` | `/api/v1/government-loads/{id}/reject` | `government.load.accept` | `QC_PENDING → REJECTED` |
+| `GET` | `/api/v1/paddy-lots`, `/paddy-lots/{id}` | `paddy.stock.view` | lot + derived `available_kg` |
+
+Full load lifecycle: `DRAFT → ARRIVED → WEIGHED → QC_PENDING → ACCEPTED | REJECTED`.
+Every transition is an explicit action endpoint, never a generic status `PATCH`;
+each runs in one transaction that stamps the actor and writes an audit entry.
+
+### Milling & rice (Stage 3)
+
+Paddy is consumed into rice, with the first stock **consumption** guarded against
+overspend. Rice stock exists only after QC passes.
+
+| Method | Path | Permission | Effect |
+|--------|------|-----------|--------|
+| `POST` | `/api/v1/milling-batches` | `milling.batch.create` | Create batch (`MB-…`, DRAFT) with paddy inputs |
+| `POST` | `/api/v1/milling-batches/{id}/start` | `milling.batch.create` | `DRAFT → IN_PROGRESS`; **consumes paddy** (locks each lot, checks stock, posts negative movement) |
+| `POST` | `/api/v1/milling-batches/{id}/productions` | `milling.batch.create` | Record rice production (`RP-…`) with two-category outputs; bag count = ⌊qty ÷ bag weight⌋ |
+| `POST` | `/api/v1/milling-batches/{id}/complete` | `milling.batch.create` | `IN_PROGRESS → COMPLETED` |
+| `POST` | `/api/v1/rice-quality/{id}/pass` | `rice.qc.approve` | `PENDING → PASSED`; creates Rice Lot (`RL-…`) + posts rice stock |
+| `POST` | `/api/v1/rice-quality/{id}/fail` | `rice.qc.approve` | `PENDING → FAILED`; no lot, no stock |
+| `GET` | `/api/v1/rice-lots`, `/rice-lots/{id}` | `rice.stock.view` | Rice lots with derived `available_kg` |
+
+Milling batch: `DRAFT → IN_PROGRESS → COMPLETED`. Rice QC: `PENDING → PASSED | FAILED`.
+A batch that would overspend a paddy lot is refused (`409 insufficient_stock`) with
+stock left untouched; concurrent milling of the same lot is serialized by a row
+lock so it cannot double-spend.
+
+### Dispatch & delivery (Stage 4)
+
+Rice leaves the mill and destination receipt is recorded. Dispatching is the rice
+**stock-out**, guarded like paddy consumption.
+
+| Method | Path | Permission | Effect |
+|--------|------|-----------|--------|
+| `POST` | `/api/v1/dispatches` | `dispatch.create` | Create dispatch (`DEL-…`, DRAFT) with rice-lot items |
+| `POST` | `/api/v1/dispatches/{id}/prepare` | `dispatch.create` | `DRAFT → PREPARED` |
+| `POST` | `/api/v1/dispatches/{id}/dispatch` | `dispatch.confirm` | `PREPARED → DISPATCHED`; **deducts rice stock** (locks each lot, checks, posts negative movement) |
+| `POST` | `/api/v1/dispatches/{id}/delivery-receipt` | `dispatch.confirm` | Records receipt (`REC-…`), computes shortage/excess, `→ DELIVERED` |
+| `GET` | `/api/v1/dispatches`, `/dispatches/{id}` | `dispatch.view` | Dispatch with items + receipt |
+| `GET` | `/api/v1/delivery-receipts`, `/…/{id}` | `dispatch.view` | Delivery receipts |
+
+Dispatch: `DRAFT → PREPARED → DISPATCHED → DELIVERED`. A dispatch that would exceed
+available rice is refused (`409 insufficient_stock`), the stock-out happens exactly
+once (status guard), and failed-QC rice can never be dispatched (it never becomes a
+rice lot). Shortage = dispatched − received; excess = received − dispatched.
+
+### Claims, payments & invoice (Stage 5)
+
+The mill bills the government for delivered rice and tracks payment to PAID. Money
+is `NUMERIC(14,2)` — never float; totals are always computed server-side.
+
+| Method | Path | Permission | Effect |
+|--------|------|-----------|--------|
+| `GET`/`PUT` | `/api/v1/mill-settings` | `settings.view` / `.manage` | Mill profile |
+| `GET`/`POST`/`PUT`/`DELETE` | `/api/v1/charge-rates` | `settings.view` / `.manage` | Configurable charge rates |
+| `POST` | `/api/v1/government-claims` | `billing.create` | Create claim (`CLM-…`) from delivered receipts; auto-fills lines from active rates × delivered qty |
+| `PUT` | `/api/v1/government-claims/{id}/lines` | `billing.create` | Edit lines (DRAFT); totals recomputed server-side |
+| `POST` | `/api/v1/government-claims/{id}/submit` · `/approve` | `billing.submit` · `billing.approve` | `DRAFT→SUBMITTED→APPROVED` |
+| `POST` | `/api/v1/government-claims/{id}/invoice` | `billing.create` | Generate the invoice **PDF** (fpdf2) → document id |
+| `GET` | `/api/v1/documents/{id}/download` | `billing.view` | Download the stored invoice PDF |
+| `POST` | `/api/v1/payments` | `payment.record` | Record payment (≤ outstanding); `→ PARTIALLY_PAID` / `PAID` |
+| `GET` | `/api/v1/reports/dashboard` | `reports.view` | KPIs (paddy/rice stock, pending delivery, claims, paid, outstanding) |
+
+Claim: `DRAFT → SUBMITTED → APPROVED → PARTIALLY_PAID → PAID`. A delivery receipt can
+be claimed at most once (unique link → duplicate-claim prevention); a payment cannot
+exceed the outstanding balance (`409 overpayment`); the final payment flips the claim
+to PAID. Invoice PDFs are stored via a documents module (local disk in dev, S3 later).
+
+### Frontend
+
+Full responsive app (Next.js App Router): login + a guarded shell with Dashboard,
+Government Loads, Setup, Paddy Stock, Milling, Rice QC/Stock, Dispatch, Delivery
+Receipts, Claims & Payments (with invoice download), and Settings. Action buttons are
+permission-gated client-side; the backend enforces every permission regardless.
+
 ## Quality gates
 
 | Area     | Commands |

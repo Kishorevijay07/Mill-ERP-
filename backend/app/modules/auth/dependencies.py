@@ -17,6 +17,16 @@ from app.core.config import get_settings
 from app.core.database import get_db
 from app.modules.auth import service
 from app.modules.auth.models import User
+from app.shared.context import ActorContext
+
+
+def actor_from_request(request: Request, user: User) -> ActorContext:
+    """Build the audit/stamping context from the request and acting user."""
+    return ActorContext(
+        user_id=user.id,
+        request_id=getattr(request.state, "request_id", None),
+        ip_address=request.client.host if request.client else None,
+    )
 
 
 def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:

@@ -50,3 +50,6 @@ redisdata/
 .DS_Store
 Thumbs.db
 *.swp
+
+# Local document storage (dev)
+document_storage/

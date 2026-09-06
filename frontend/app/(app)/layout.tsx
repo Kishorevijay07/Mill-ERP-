@@ -1,0 +1,35 @@
+"use client";
+
+import { useRouter } from "next/navigation";
+import { useEffect } from "react";
+import { useMe } from "@/lib/auth";
+import { AppShell } from "@/components/app-shell";
+import { Spinner } from "@/components/ui/misc";
+
+export default function AuthenticatedLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  const router = useRouter();
+  const { data, isLoading, isError } = useMe();
+
+  useEffect(() => {
+    if (isError) router.replace("/login");
+  }, [isError, router]);
+
+  if (isLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <Spinner className="h-8 w-8" />
+      </div>
+    );
+  }
+
+  if (!data) {
+    // Redirecting to /login.
+    return null;
+  }
+
+  return <AppShell>{children}</AppShell>;
+}

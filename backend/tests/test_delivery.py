@@ -164,19 +164,49 @@ def test_delivery_receipt_calculates_excess(client, make_user) -> None:
 # --------------------------------------------------------------------------- #
 # Overspend + exactly-once
 # --------------------------------------------------------------------------- #
-def test_dispatch_cannot_overspend_rice(client, make_user) -> None:
+def test_dispatch_create_rejects_over_available(client, make_user) -> None:
+    """A dispatch line exceeding the lot's available balance is refused at
+    creation (early validation) and persists no dispatch row."""
     _users(make_user)
     _login(client, "owner", "owner-passphrase-1")
     lot_id = _rice_lot(client)  # 3000 available
-    dispatch = _dispatch_with_item(client, lot_id, "5000.000")
-    client.post(f"/api/v1/dispatches/{dispatch['id']}/prepare")
 
-    resp = client.post(f"/api/v1/dispatches/{dispatch['id']}/dispatch")
+    resp = client.post(
+        "/api/v1/dispatches",
+        json={
+            "destination_name": "Govt Warehouse #4",
+            "lorry_number": "TN22ZZ9",
+            "items": [{"rice_lot_id": lot_id, "quantity_kg": "5000.000"}],
+        },
+    )
     assert resp.status_code == 409
     assert resp.json()["error"]["code"] == "insufficient_stock"
-    # Stock untouched; status still PREPARED.
+    # Nothing was written; stock untouched.
+    assert client.get("/api/v1/dispatches").json()["total"] == 0
     assert _rice_available(client, lot_id) == Decimal("3000.000")
-    assert client.get(f"/api/v1/dispatches/{dispatch['id']}").json()["status"] == "PREPARED"
+
+
+def test_dispatch_time_guard_blocks_concurrent_overspend(client, make_user) -> None:
+    """Two dispatches each fit the lot individually but together overspend it.
+    The first dispatches; the final row-locked guard refuses the second."""
+    _users(make_user)
+    _login(client, "owner", "owner-passphrase-1")
+    lot_id = _rice_lot(client)  # 3000 available
+
+    first = _dispatch_with_item(client, lot_id, "2000.000")
+    second = _dispatch_with_item(client, lot_id, "2000.000")
+    client.post(f"/api/v1/dispatches/{first['id']}/prepare")
+    client.post(f"/api/v1/dispatches/{second['id']}/prepare")
+
+    assert client.post(f"/api/v1/dispatches/{first['id']}/dispatch").status_code == 200
+    assert _rice_available(client, lot_id) == Decimal("1000.000")
+
+    resp = client.post(f"/api/v1/dispatches/{second['id']}/dispatch")
+    assert resp.status_code == 409
+    assert resp.json()["error"]["code"] == "insufficient_stock"
+    # Stock untouched by the failed second dispatch; it stays PREPARED.
+    assert _rice_available(client, lot_id) == Decimal("1000.000")
+    assert client.get(f"/api/v1/dispatches/{second['id']}").json()["status"] == "PREPARED"
 
 
 def test_double_dispatch_prevented(client, make_user) -> None:

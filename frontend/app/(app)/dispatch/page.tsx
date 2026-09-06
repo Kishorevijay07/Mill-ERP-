@@ -31,6 +31,33 @@ function NewDispatchForm({ onClose }: { onClose: () => void }) {
   const available = (lots?.items ?? []).filter(
     (l) => Number(l.available_kg) > 0,
   );
+  const availableById = new Map(
+    available.map((l) => [l.id, Number(l.available_kg)]),
+  );
+
+  // Requested total per lot across all rows — a lot can be split over rows, so a
+  // single row can look fine while the lot is collectively overspent.
+  const requestedByLot = new Map<string, number>();
+  for (const r of rows) {
+    if (!r.rice_lot_id || !r.quantity_kg) continue;
+    requestedByLot.set(
+      r.rice_lot_id,
+      (requestedByLot.get(r.rice_lot_id) ?? 0) + Number(r.quantity_kg),
+    );
+  }
+
+  function rowError(row: Row): string | undefined {
+    if (!row.rice_lot_id || !row.quantity_kg) return undefined;
+    const avail = availableById.get(row.rice_lot_id);
+    if (avail === undefined) return undefined;
+    const requested = requestedByLot.get(row.rice_lot_id) ?? 0;
+    if (requested > avail) {
+      return `Exceeds available (${formatKg(avail)}) for this lot`;
+    }
+    return undefined;
+  }
+
+  const hasErrors = rows.some((r) => rowError(r) !== undefined);
 
   function update(i: number, patch: Partial<Row>) {
     setRows((r) =>
@@ -40,6 +67,7 @@ function NewDispatchForm({ onClose }: { onClose: () => void }) {
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
+    if (hasErrors) return;
     create.mutate(
       {
         destination_name: destination,
@@ -78,37 +106,52 @@ function NewDispatchForm({ onClose }: { onClose: () => void }) {
                 />
               </Field>
             </div>
-            {rows.map((row, i) => (
-              <div key={i} className="grid gap-3 sm:grid-cols-2">
-                <Field label="Rice lot">
-                  <Select
-                    value={row.rice_lot_id}
-                    onChange={(e) => update(i, { rice_lot_id: e.target.value })}
-                    required
-                  >
-                    <option value="" disabled>
-                      Select rice lot
-                    </option>
-                    {available.map((l) => (
-                      <option key={l.id} value={l.id}>
-                        {l.reference} · {l.category.replace("_", " ")} ·{" "}
-                        {formatKg(l.available_kg)}
+            {rows.map((row, i) => {
+              const rowAvail = row.rice_lot_id
+                ? availableById.get(row.rice_lot_id)
+                : undefined;
+              return (
+                <div key={i} className="grid gap-3 sm:grid-cols-2">
+                  <Field label="Rice lot">
+                    <Select
+                      value={row.rice_lot_id}
+                      onChange={(e) =>
+                        update(i, { rice_lot_id: e.target.value })
+                      }
+                      required
+                    >
+                      <option value="" disabled>
+                        Select rice lot
                       </option>
-                    ))}
-                  </Select>
-                </Field>
-                <Field label="Quantity (kg)">
-                  <Input
-                    type="number"
-                    step="0.001"
-                    min="0.001"
-                    value={row.quantity_kg}
-                    onChange={(e) => update(i, { quantity_kg: e.target.value })}
-                    required
-                  />
-                </Field>
-              </div>
-            ))}
+                      {available.map((l) => (
+                        <option key={l.id} value={l.id}>
+                          {l.reference} · {l.category.replace("_", " ")} ·{" "}
+                          {formatKg(l.available_kg)}
+                        </option>
+                      ))}
+                    </Select>
+                  </Field>
+                  <Field label="Quantity (kg)" error={rowError(row)}>
+                    <Input
+                      type="number"
+                      step="0.001"
+                      min="0.001"
+                      max={rowAvail}
+                      value={row.quantity_kg}
+                      onChange={(e) =>
+                        update(i, { quantity_kg: e.target.value })
+                      }
+                      required
+                    />
+                    {rowAvail !== undefined ? (
+                      <p className="text-xs text-muted-foreground">
+                        Available: {formatKg(rowAvail)}
+                      </p>
+                    ) : null}
+                  </Field>
+                </div>
+              );
+            })}
             <Button
               type="button"
               variant="outline"
@@ -127,7 +170,7 @@ function NewDispatchForm({ onClose }: { onClose: () => void }) {
               }
             />
             <div className="flex gap-2">
-              <Button type="submit" disabled={create.isPending}>
+              <Button type="submit" disabled={create.isPending || hasErrors}>
                 {create.isPending ? "Creating…" : "Create dispatch"}
               </Button>
               <Button type="button" variant="ghost" onClick={onClose}>

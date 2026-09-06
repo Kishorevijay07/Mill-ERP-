@@ -59,9 +59,27 @@ def _load_dispatch(db: Session, dispatch_id: uuid.UUID) -> Dispatch:
 
 
 def create_dispatch(db: Session, data: DispatchCreate, actor: ActorContext) -> Dispatch:
+    # Aggregate the requested quantity per rice lot and validate it against the
+    # available balance up front, so an operator cannot build (and later prepare)
+    # a dispatch that can never be fulfilled. The row-locked check at dispatch
+    # time remains the final authority against concurrent stock-outs.
+    requested_by_lot: dict[uuid.UUID, Decimal] = {}
     for item in data.items:
-        if db.get(RiceLot, item.rice_lot_id) is None:
-            raise NotFoundError(f"Rice lot {item.rice_lot_id} not found")
+        requested_by_lot[item.rice_lot_id] = (
+            requested_by_lot.get(item.rice_lot_id, Decimal("0")) + item.quantity_kg
+        )
+    for rice_lot_id, requested in requested_by_lot.items():
+        lot = db.get(RiceLot, rice_lot_id)
+        if lot is None:
+            raise NotFoundError(f"Rice lot {rice_lot_id} not found")
+        available = inventory_service.available_quantity(
+            db, InventoryItemType.RICE_LOT, rice_lot_id
+        )
+        if requested > available:
+            raise inventory_service.InsufficientStockError(
+                f"Insufficient stock for rice lot {lot.reference}: "
+                f"available {available}, requested {requested}"
+            )
     if (
         data.destination_agency_id is not None
         and db.get(GovernmentAgency, data.destination_agency_id) is None

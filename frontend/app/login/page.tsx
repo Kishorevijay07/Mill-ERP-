@@ -26,7 +26,7 @@ export default function LoginPage() {
   const { data: me } = useMe();
 
   useEffect(() => {
-    if (me) router.replace("/loads");
+    if (me) router.replace("/invoices");
   }, [me, router]);
 
   const {
@@ -36,7 +36,7 @@ export default function LoginPage() {
   } = useForm<FormValues>({ resolver: zodResolver(schema) });
 
   function onSubmit(values: FormValues) {
-    login.mutate(values, { onSuccess: () => router.replace("/loads") });
+    login.mutate(values, { onSuccess: () => router.replace("/invoices") });
   }
 
   const errorMessage =
@@ -50,7 +50,9 @@ export default function LoginPage() {
     <main className="flex min-h-screen items-center justify-center bg-muted/30 p-4">
       <Card className="w-full max-w-sm">
         <CardHeader>
-          <CardTitle>Rice Mill ERP</CardTitle>
+          <CardTitle>
+            (RM)<sup>2</sup>
+          </CardTitle>
           <p className="mt-1 text-sm text-muted-foreground">
             Sign in to continue
           </p>

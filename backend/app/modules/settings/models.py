@@ -38,6 +38,17 @@ class MillSettings(UUIDPrimaryKeyMixin, TimestampMixin, AuditActorMixin, Base):
     currency: Mapped[str] = mapped_column(String(8), nullable=False, default="INR")
     invoice_notes: Mapped[str | None] = mapped_column(String(2000), nullable=True)
 
+    # GST tax-invoice identity (seller block + tax invoice bank/declaration).
+    gstin: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    state_name: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    state_code: Mapped[str | None] = mapped_column(String(4), nullable=True)
+    bank_account_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    bank_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    bank_account_no: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    bank_branch: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    bank_ifsc: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    invoice_declaration: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+
 
 class ChargeRate(UUIDPrimaryKeyMixin, TimestampMixin, AuditActorMixin, Base):
     __tablename__ = "charge_rates"

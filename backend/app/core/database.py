@@ -23,9 +23,20 @@ def _engine_kwargs(url: str) -> dict[str, object]:
     PostgreSQL (production) uses a short connect timeout so the readiness probe
     fails fast instead of blocking. SQLite (hermetic tests) needs a different
     connect arg and cannot share a pooled connection across threads.
+
+    The two Postgres drivers take different connect args: psycopg uses
+    ``connect_timeout``; pg8000 (pure Python) uses ``timeout`` and needs an
+    explicit TLS ``ssl_context`` for managed Postgres such as Neon.
     """
     if url.startswith("sqlite"):
         return {"connect_args": {"check_same_thread": False}}
+    if "+pg8000" in url:
+        import ssl
+
+        return {
+            "pool_pre_ping": True,
+            "connect_args": {"ssl_context": ssl.create_default_context(), "timeout": 10},
+        }
     return {"pool_pre_ping": True, "connect_args": {"connect_timeout": 3}}
 
 

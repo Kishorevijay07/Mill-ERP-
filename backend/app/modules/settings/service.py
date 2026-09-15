@@ -46,6 +46,15 @@ def update_mill_settings(
     settings.contact_email = data.contact_email
     settings.currency = data.currency
     settings.invoice_notes = data.invoice_notes
+    settings.gstin = data.gstin
+    settings.state_name = data.state_name
+    settings.state_code = data.state_code
+    settings.bank_account_name = data.bank_account_name
+    settings.bank_name = data.bank_name
+    settings.bank_account_no = data.bank_account_no
+    settings.bank_branch = data.bank_branch
+    settings.bank_ifsc = data.bank_ifsc
+    settings.invoice_declaration = data.invoice_declaration
     settings.updated_by = actor.user_id
     record_audit(
         db,

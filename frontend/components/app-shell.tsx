@@ -7,16 +7,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 
 const NAV = [
-  { href: "/dashboard", label: "Dashboard" },
-  { href: "/loads", label: "Government Loads" },
-  { href: "/setup", label: "Setup" },
-  { href: "/paddy-stock", label: "Paddy Stock" },
-  { href: "/milling", label: "Milling" },
-  { href: "/rice/qc", label: "Rice QC" },
-  { href: "/rice/stock", label: "Rice Stock" },
-  { href: "/dispatch", label: "Dispatch" },
-  { href: "/receipts", label: "Delivery Receipts" },
-  { href: "/claims", label: "Claims & Payments" },
+  { href: "/invoices", label: "Invoices" },
   { href: "/settings", label: "Settings" },
 ];
 
@@ -37,10 +28,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <aside className="border-b border-border bg-muted/40 md:w-60 md:border-b-0 md:border-r">
         <div className="flex items-center justify-between p-4 md:block">
           <div>
-            <p className="text-sm font-semibold">Rice Mill ERP</p>
-            <p className="text-xs text-muted-foreground">
-              Government receiving
+            <p className="text-base font-semibold">
+              (RM)<sup>2</sup>
             </p>
+            <p className="text-xs text-muted-foreground">GST Invoicing</p>
           </div>
         </div>
         <nav className="flex gap-1 overflow-x-auto px-2 pb-2 md:flex-col md:px-2">

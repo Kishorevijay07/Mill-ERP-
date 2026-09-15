@@ -226,6 +226,15 @@ export interface MillSettings {
   contact_email: string | null;
   currency: string;
   invoice_notes: string | null;
+  gstin: string | null;
+  state_name: string | null;
+  state_code: string | null;
+  bank_account_name: string | null;
+  bank_name: string | null;
+  bank_account_no: string | null;
+  bank_branch: string | null;
+  bank_ifsc: string | null;
+  invoice_declaration: string | null;
 }
 
 export interface ChargeRate {
@@ -285,6 +294,110 @@ export interface ClaimDetail extends Claim {
   payments: Payment[];
   paid_amount: string;
   outstanding_amount: string;
+}
+
+// ---- Invoicing (commercial GST tax invoices) ----
+export interface Buyer {
+  id: string;
+  name: string;
+  address: string | null;
+  gstin: string | null;
+  state_name: string | null;
+  state_code: string | null;
+  cell: string | null;
+  is_active: boolean;
+}
+
+export interface Product {
+  id: string;
+  name: string;
+  hsn_sac: string | null;
+  default_gst_rate: string;
+  default_uom: string;
+  default_rate: string | null;
+  is_active: boolean;
+}
+
+export type InvoiceStatus = "DRAFT" | "ISSUED";
+
+export interface InvoiceLine {
+  id: string;
+  product_id: string | null;
+  description: string;
+  hsn_sac: string | null;
+  quantity: string;
+  uom: string;
+  rate: string;
+  taxable_amount: string;
+  gst_rate: string;
+  gst_amount: string;
+  cgst_rate: string;
+  cgst_amount: string;
+  sgst_rate: string;
+  sgst_amount: string;
+  igst_rate: string;
+  igst_amount: string;
+  sort_order: number;
+}
+
+export interface TaxSummaryRow {
+  hsn_sac: string | null;
+  taxable_amount: string;
+  gst_rate: string;
+  gst_amount: string;
+  cgst_rate: string;
+  cgst_amount: string;
+  sgst_rate: string;
+  sgst_amount: string;
+  igst_rate: string;
+  igst_amount: string;
+}
+
+export interface TaxInvoice {
+  id: string;
+  reference: string;
+  invoice_number: string;
+  invoice_date: string;
+  status: InvoiceStatus;
+  currency: string;
+  buyer_id: string | null;
+  buyer_name: string;
+  buyer_address: string | null;
+  buyer_gstin: string | null;
+  buyer_state_name: string | null;
+  buyer_state_code: string | null;
+  buyer_cell: string | null;
+  destination: string | null;
+  motor_vehicle_no: string | null;
+  remarks: string | null;
+  taxable_amount: string;
+  total_tax_amount: string;
+  round_off: string;
+  grand_total: string;
+  issued_at: string | null;
+  pdf_document_id: string | null;
+  eway_document_id: string | null;
+  created_at: string;
+}
+
+export interface TaxInvoiceDetail extends TaxInvoice {
+  delivery_note: string | null;
+  mode_terms_of_payment: string | null;
+  reference_no_date: string | null;
+  other_references: string | null;
+  buyers_order_no: string | null;
+  buyers_order_dated: string | null;
+  dispatch_doc_no: string | null;
+  delivery_note_date: string | null;
+  dispatched_through: string | null;
+  bill_of_lading_lr_rr_no: string | null;
+  terms_of_delivery: string | null;
+  declaration: string | null;
+  is_interstate: boolean;
+  lines: InvoiceLine[];
+  tax_summary: TaxSummaryRow[];
+  amount_in_words: string;
+  tax_amount_in_words: string;
 }
 
 // ---- Dashboard ----

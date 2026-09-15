@@ -29,6 +29,7 @@ class ReferencePrefix(StrEnum):
     DELIVERY_RECEIPT = "REC"
     CLAIM = "CLM"
     PAYMENT = "PAY"
+    INVOICE = "INV"
 
 
 class ReferenceCounter(Base):

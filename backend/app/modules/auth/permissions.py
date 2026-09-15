@@ -54,6 +54,12 @@ class Permission(StrEnum):
     BILLING_APPROVE = "billing.approve"
     PAYMENT_RECORD = "payment.record"
 
+    # Invoicing (commercial GST tax invoices + buyer/product masters)
+    INVOICE_VIEW = "invoice.view"
+    INVOICE_CREATE = "invoice.create"
+    INVOICE_ISSUE = "invoice.issue"
+    INVOICE_MASTERS_MANAGE = "invoice.masters.manage"
+
     # Cross-cutting
     REPORTS_VIEW = "reports.view"
     SETTINGS_VIEW = "settings.view"
@@ -87,6 +93,8 @@ _STAFF_PERMISSIONS: frozenset[str] = frozenset(
         Permission.DISPATCH_CREATE,
         Permission.DISPATCH_VIEW,
         Permission.REPORTS_VIEW,
+        Permission.INVOICE_VIEW,
+        Permission.INVOICE_CREATE,
     }
 )
 
@@ -106,6 +114,8 @@ _OWNER_PERMISSIONS: frozenset[str] = _STAFF_PERMISSIONS | frozenset(
         Permission.BILLING_SUBMIT,
         Permission.BILLING_APPROVE,
         Permission.PAYMENT_RECORD,
+        Permission.INVOICE_ISSUE,
+        Permission.INVOICE_MASTERS_MANAGE,
         Permission.SETTINGS_VIEW,
     }
 )

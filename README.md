@@ -190,11 +190,37 @@ be claimed at most once (unique link → duplicate-claim prevention); a payment 
 exceed the outstanding balance (`409 overpayment`); the final payment flips the claim
 to PAID. Invoice PDFs are stored via a documents module (local disk in dev, S3 later).
 
+### Tax invoices (commercial GST sales)
+
+A standalone invoicing module produces the mill's **GST "TAX INVOICE"** (Tally-style
+layout) for commercial sales of rice and by-products (e.g. rice bran) to private
+buyers — separate from the government-claim flow. Buyer and product masters make
+repeat invoices fast; buyer details are snapshotted onto each invoice; GST, totals
+and the Indian amount-in-words are computed server-side (money is `NUMERIC`).
+
+| Method | Path | Permission | Effect |
+|--------|------|-----------|--------|
+| `GET`/`POST`/`PUT` | `/api/v1/buyers` | `invoice.view` / `.masters.manage` | Buyer master (name, GSTIN, state, cell) |
+| `GET`/`POST`/`PUT` | `/api/v1/products` | `invoice.view` / `.masters.manage` | Product master (HSN, default GST %, UOM, rate) |
+| `POST`/`GET` | `/api/v1/tax-invoices` | `invoice.create` / `.view` | Create (`INV-…`, DRAFT) / list; totals + tax computed server-side |
+| `PUT` | `/api/v1/tax-invoices/{id}` | `invoice.create` | Edit while DRAFT |
+| `POST` | `/api/v1/tax-invoices/{id}/issue` | `invoice.issue` | `DRAFT → ISSUED`; locks edits and renders the PDF |
+| `POST` | `/api/v1/tax-invoices/{id}/pdf` · `GET …/pdf/download` | `invoice.create` · `.view` | Generate / download the invoice PDF (3 copies: Original/Duplicate/Triplicate) |
+| `POST` | `/api/v1/tax-invoices/{id}/eway-bill` | `invoice.create` | Upload & store the government e-Way Bill PDF against the invoice |
+
+Mill GSTIN, state code, bank details and the declaration live in **Settings** and
+flow onto every invoice. The e-Way Bill is issued by the government portal and is
+**not** auto-generated (out of Phase 1 scope) — only stored when uploaded. The ₹
+symbol renders when a Unicode TTF is present at
+`backend/app/modules/invoicing/assets/DejaVuSans.ttf`; otherwise it falls back to
+`Rs.`.
+
 ### Frontend
 
 Full responsive app (Next.js App Router): login + a guarded shell with Dashboard,
 Government Loads, Setup, Paddy Stock, Milling, Rice QC/Stock, Dispatch, Delivery
-Receipts, Claims & Payments (with invoice download), and Settings. Action buttons are
+Receipts, Claims & Payments (with invoice download), Invoices (GST tax invoices),
+and Settings. Action buttons are
 permission-gated client-side; the backend enforces every permission regardless.
 
 ## Quality gates

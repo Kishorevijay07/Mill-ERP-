@@ -173,10 +173,7 @@ function Buyers({ canManage }: { canManage: boolean }) {
   const [recentStates, setRecentStates] = useState<string[]>([]);
 
   useEffect(() => setRecentStates(readRecentStateCodes()), []);
-  const stateOptions = useMemo(
-    () => orderStates(recentStates),
-    [recentStates],
-  );
+  const stateOptions = useMemo(() => orderStates(recentStates), [recentStates]);
 
   function pickState(code: string) {
     const s = stateByCode(code);

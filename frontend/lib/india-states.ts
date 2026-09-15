@@ -47,7 +47,9 @@ export const INDIA_STATES: IndiaState[] = [
   { code: "97", name: "Other Territory" },
 ];
 
-export function stateByCode(code: string | null | undefined): IndiaState | undefined {
+export function stateByCode(
+  code: string | null | undefined,
+): IndiaState | undefined {
   if (!code) return undefined;
   return INDIA_STATES.find((s) => s.code === code);
 }
@@ -67,7 +69,10 @@ export function readRecentStateCodes(): string[] {
 }
 
 export function pushRecentStateCode(code: string, current: string[]): string[] {
-  const next = [code, ...current.filter((c) => c !== code)].slice(0, RECENT_MAX);
+  const next = [code, ...current.filter((c) => c !== code)].slice(
+    0,
+    RECENT_MAX,
+  );
   if (typeof window !== "undefined") {
     try {
       window.localStorage.setItem(RECENT_KEY, JSON.stringify(next));

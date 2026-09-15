@@ -15,6 +15,7 @@ from contextlib import asynccontextmanager
 
 import structlog
 from fastapi import FastAPI, Request
+from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -26,6 +27,7 @@ from app.api.v1.router import api_router
 from app.core.config import get_settings
 from app.core.logging import configure_logging, get_logger
 from app.modules.system.router import router as system_router
+from app.shared.errors import DomainError
 
 
 @asynccontextmanager
@@ -63,6 +65,7 @@ def create_app() -> FastAPI:
         call_next: Callable[[Request], Awaitable[StarletteResponse]],
     ) -> StarletteResponse:
         request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
+        request.state.request_id = request_id
         structlog.contextvars.clear_contextvars()
         structlog.contextvars.bind_contextvars(
             request_id=request_id,
@@ -96,9 +99,19 @@ def _register_error_handlers(app: FastAPI) -> None:
     async def validation_error_handler(
         request: Request, exc: RequestValidationError
     ) -> JSONResponse:
+        # exc.errors() can contain non-JSON-native values (e.g. Decimal inputs);
+        # encode them safely before returning.
+        field_errors = jsonable_encoder(exc.errors())
         return JSONResponse(
             status_code=422,
-            content=_error_body("validation_error", "Request validation failed", exc.errors()),
+            content=_error_body("validation_error", "Request validation failed", field_errors),
+        )
+
+    @app.exception_handler(DomainError)
+    async def domain_error_handler(request: Request, exc: DomainError) -> JSONResponse:
+        return JSONResponse(
+            status_code=exc.status_code,
+            content=_error_body(exc.code, exc.message),
         )
 
     @app.exception_handler(StarletteHTTPException)

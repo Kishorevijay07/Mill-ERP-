@@ -1,0 +1,214 @@
+"use client";
+
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { apiFetch } from "@/lib/api";
+import type {
+  Buyer,
+  Page,
+  Product,
+  TaxInvoice,
+  TaxInvoiceDetail,
+} from "@/lib/types";
+
+const API_BASE =
+  process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000/api/v1";
+
+// ---- Buyers ----
+export function useBuyers(activeOnly = false) {
+  return useQuery({
+    queryKey: ["buyers", activeOnly],
+    queryFn: () => apiFetch<Buyer[]>(`/buyers?active_only=${activeOnly}`),
+  });
+}
+
+export interface BuyerInput {
+  name: string;
+  address?: string;
+  gstin?: string;
+  state_name?: string;
+  state_code?: string;
+  cell?: string;
+  is_active?: boolean;
+}
+
+export function useCreateBuyer() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: BuyerInput) =>
+      apiFetch<Buyer>("/buyers", {
+        method: "POST",
+        body: JSON.stringify(input),
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["buyers"] }),
+  });
+}
+
+export function useDeleteBuyer() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      apiFetch<void>(`/buyers/${id}`, { method: "DELETE" }),
+    // Optimistically drop the row so the list re-renders immediately on click.
+    onMutate: async (id: string) => {
+      await qc.cancelQueries({ queryKey: ["buyers"] });
+      const snapshots = qc.getQueriesData<Buyer[]>({ queryKey: ["buyers"] });
+      for (const [key, list] of snapshots) {
+        if (list) {
+          qc.setQueryData<Buyer[]>(
+            key,
+            list.filter((b) => b.id !== id),
+          );
+        }
+      }
+      return { snapshots };
+    },
+    onError: (_err, _id, context) => {
+      for (const [key, list] of context?.snapshots ?? []) {
+        qc.setQueryData(key, list);
+      }
+    },
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: ["buyers"] });
+    },
+  });
+}
+
+// ---- Products ----
+export function useProducts(activeOnly = false) {
+  return useQuery({
+    queryKey: ["products", activeOnly],
+    queryFn: () => apiFetch<Product[]>(`/products?active_only=${activeOnly}`),
+  });
+}
+
+export interface ProductInput {
+  name: string;
+  hsn_sac?: string;
+  default_gst_rate?: string;
+  default_uom?: string;
+  default_rate?: string;
+  is_active?: boolean;
+}
+
+export function useCreateProduct() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: ProductInput) =>
+      apiFetch<Product>("/products", {
+        method: "POST",
+        body: JSON.stringify(input),
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["products"] }),
+  });
+}
+
+// ---- Tax invoices ----
+export interface InvoiceLineInput {
+  product_id?: string | null;
+  description: string;
+  hsn_sac?: string;
+  quantity: string;
+  uom: string;
+  rate: string;
+  gst_rate: string;
+}
+
+export interface InvoiceInput {
+  invoice_date: string;
+  invoice_number?: string;
+  buyer_id?: string | null;
+  dispatched_through?: string;
+  destination?: string;
+  motor_vehicle_no?: string;
+  delivery_note?: string;
+  mode_terms_of_payment?: string;
+  reference_no_date?: string;
+  buyers_order_no?: string;
+  remarks?: string;
+  declaration?: string;
+  lines: InvoiceLineInput[];
+}
+
+export function useInvoices(page = 1) {
+  return useQuery({
+    queryKey: ["tax-invoices", page],
+    queryFn: () => apiFetch<Page<TaxInvoice>>(`/tax-invoices?page=${page}`),
+  });
+}
+
+export function useInvoice(id: string) {
+  return useQuery({
+    queryKey: ["tax-invoice", id],
+    queryFn: () => apiFetch<TaxInvoiceDetail>(`/tax-invoices/${id}`),
+    enabled: Boolean(id),
+  });
+}
+
+export function useCreateInvoice() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: InvoiceInput) =>
+      apiFetch<TaxInvoiceDetail>("/tax-invoices", {
+        method: "POST",
+        body: JSON.stringify(input),
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["tax-invoices"] }),
+  });
+}
+
+function invalidate(qc: ReturnType<typeof useQueryClient>, id: string) {
+  qc.invalidateQueries({ queryKey: ["tax-invoices"] });
+  qc.invalidateQueries({ queryKey: ["tax-invoice", id] });
+}
+
+export function useIssueInvoice(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      apiFetch<TaxInvoiceDetail>(`/tax-invoices/${id}/issue`, {
+        method: "POST",
+      }),
+    onSuccess: () => invalidate(qc, id),
+  });
+}
+
+export function useUploadEwayBill(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (file: File) => {
+      const body = new FormData();
+      body.append("file", file);
+      const res = await fetch(`${API_BASE}/tax-invoices/${id}/eway-bill`, {
+        method: "POST",
+        credentials: "include",
+        body,
+      });
+      if (!res.ok) throw new Error("Failed to upload e-Way Bill");
+      return (await res.json()) as { document_id: string; filename: string };
+    },
+    onSuccess: () => invalidate(qc, id),
+  });
+}
+
+/** Fetch the invoice PDF (with session cookie) and trigger a browser download. */
+export async function downloadInvoicePdf(
+  invoiceId: string,
+  invoiceNumber: string,
+): Promise<void> {
+  const res = await fetch(
+    `${API_BASE}/tax-invoices/${invoiceId}/pdf/download`,
+    {
+      credentials: "include",
+    },
+  );
+  if (!res.ok) throw new Error("Failed to download invoice PDF");
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `tax-invoice-${invoiceNumber}.pdf`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}

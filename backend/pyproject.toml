@@ -13,10 +13,15 @@ dependencies = [
     "sqlalchemy>=2.0.36,<2.1",
     "alembic>=1.14,<2",
     "psycopg[binary]>=3.2,<4",
+    # Pure-Python Postgres driver. An alternative to psycopg for local dev on
+    # machines where the psycopg binary (libpq.dll) is blocked by an OS policy
+    # such as Windows Smart App Control. Selected via DB_DRIVER=pg8000.
+    "pg8000>=1.31,<2",
     "redis>=5.2,<6",
     "structlog>=24.4,<25",
     "python-multipart>=0.0.12,<0.1",
     "pwdlib[argon2]>=0.2.1,<0.3",
+    "fpdf2>=2.8,<3",
 ]
 
 [project.optional-dependencies]

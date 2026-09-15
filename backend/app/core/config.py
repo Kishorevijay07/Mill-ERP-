@@ -16,6 +16,18 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 Environment = Literal["development", "staging", "production"]
 
 
+def _strip_libpq_only_params(rest: str) -> str:
+    """Drop libpq-only query params (``sslmode``, ``channel_binding``) that the
+    pure-Python pg8000 driver does not understand. TLS for pg8000 is configured
+    via connect_args in ``app.core.database`` instead."""
+    base, sep, query = rest.partition("?")
+    if not sep:
+        return rest
+    drop = {"sslmode", "channel_binding"}
+    kept = [kv for kv in query.split("&") if kv.split("=", 1)[0].lower() not in drop]
+    return base + ("?" + "&".join(kept) if kept else "")
+
+
 class Settings(BaseSettings):
     """Typed, validated application settings."""
 
@@ -48,6 +60,10 @@ class Settings(BaseSettings):
     # A full SQLAlchemy URL. Accepts the production ``postgresql+psycopg://`` form
     # and ``sqlite://`` for hermetic tests. Validated by SQLAlchemy at connect time.
     database_url: str | None = None
+    # SQLAlchemy driver for bare ``postgresql://`` URLs. "psycopg" (v3, native) is
+    # the default; set DB_DRIVER=pg8000 to use the pure-Python driver locally when
+    # the psycopg binary is blocked (e.g. Windows Smart App Control).
+    db_driver: Literal["psycopg", "pg8000"] = "psycopg"
     postgres_host: str = "localhost"
     postgres_port: int = 5432
     postgres_db: str = "rice_mill_erp"
@@ -64,6 +80,11 @@ class Settings(BaseSettings):
     s3_access_key: str = "minioadmin"
     s3_secret_key: str = "minioadmin"
     s3_use_path_style: bool = True
+
+    # ---- Document storage ----
+    # Backend for stored files: "local" (dev, on-disk) or "s3" (future).
+    document_storage_backend: str = "local"
+    document_storage_dir: str = "./document_storage"
 
     # ---- Observability ----
     sentry_dsn: str | None = None
@@ -90,9 +111,19 @@ class Settings(BaseSettings):
         discrete Postgres settings using the psycopg (v3) driver.
         """
         if self.database_url is not None:
-            return str(self.database_url)
+            url = str(self.database_url)
+            # Normalise bare libpq schemes (as emitted by managed Postgres such as
+            # Neon/Heroku) to the configured SQLAlchemy driver. Without this,
+            # SQLAlchemy defaults to psycopg2, which is not a dependency.
+            for prefix in ("postgresql://", "postgres://"):
+                if url.startswith(prefix):
+                    rest = url[len(prefix) :]
+                    if self.db_driver == "pg8000":
+                        rest = _strip_libpq_only_params(rest)
+                    return f"postgresql+{self.db_driver}://{rest}"
+            return url
         return (
-            f"postgresql+psycopg://{self.postgres_user}:{self.postgres_password}"
+            f"postgresql+{self.db_driver}://{self.postgres_user}:{self.postgres_password}"
             f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
         )
 

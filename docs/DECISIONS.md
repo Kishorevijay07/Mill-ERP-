@@ -5,6 +5,57 @@ context, the decision, and consequences. Supersede rather than rewrite history.
 
 ---
 
+## ADR-0009 — Money as `NUMERIC(14,2)`, totals computed server-side
+
+**Status:** Accepted (Stage 5)
+
+**Context.** Claims/payments require exact currency arithmetic; floats are banned.
+
+**Decision.** Monetary columns are `NUMERIC(14,2)`, rates `NUMERIC(14,4)`,
+quantities `NUMERIC(14,3)`; all handling uses Python `Decimal` with explicit
+`ROUND_HALF_UP` quantization. Gross/deduction/net and outstanding balances are
+always recomputed server-side from the lines/payments — never trusted from the
+client. Payments are capped at the outstanding balance.
+
+**Consequences.** No floating-point drift; the API is the single source of truth
+for money.
+
+---
+
+## ADR-0010 — Invoice PDFs via fpdf2
+
+**Status:** Accepted (Stage 5)
+
+**Context.** The mill must generate a government claim/invoice document. The docs
+mention Playwright-based PDF, which is heavy (Chromium) for the backend image.
+
+**Decision.** Render invoices with **fpdf2** — pure-Python, no native libraries —
+so generation works on Windows dev and in a slim Docker image. Invoices are
+generated from the claim + mill settings and stored as documents.
+
+**Consequences.** Zero extra system dependencies; core fonts are latin-1 (currency
+shown as code/"Rs."). A richer HTML→PDF renderer can be swapped in later behind the
+same generation call.
+
+---
+
+## ADR-0011 — Documents: metadata in Postgres, bytes in object storage
+
+**Status:** Accepted (Stage 5)
+
+**Context.** DEVELOPMENT-RULES require file bytes in object storage with metadata
+in Postgres. MinIO/S3 is not running in local dev.
+
+**Decision.** A `documents` table holds metadata; a `Storage` protocol abstracts
+byte storage with a `LocalDiskStorage` dev backend (base dir from settings) and an
+S3 backend as the later swap. Storage keys are generated server-side; original
+filenames are never used as paths.
+
+**Consequences.** Invoices work immediately in dev without MinIO; production swaps
+the storage backend without changing callers.
+
+---
+
 ## ADR-0001 — Modular monolith with a versioned REST API
 
 **Status:** Accepted (Phase 0)

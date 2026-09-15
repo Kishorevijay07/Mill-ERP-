@@ -21,6 +21,18 @@ os.environ.setdefault("SECRET_KEY", "test-secret-key-at-least-16-chars")
 os.environ.setdefault("SESSION_COOKIE_SECURE", "false")
 os.environ.setdefault("DATABASE_URL", "sqlite:///./test_rmerp.db")
 
+# Invoice-only build: the government/receiving/milling/rice/delivery/billing HTTP
+# routers are unregistered (see app/api/v1/router.py), so their endpoint tests
+# cannot run. Skip collecting them here. Re-register the routers and remove the
+# matching entries below to bring those suites back.
+collect_ignore = [
+    "test_billing.py",
+    "test_delivery.py",
+    "test_government.py",
+    "test_milling.py",
+    "test_receiving.py",
+]
+
 
 @pytest.fixture(autouse=True)
 def _database() -> Iterator[None]:

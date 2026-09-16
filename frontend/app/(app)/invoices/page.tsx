@@ -145,7 +145,7 @@ function NewInvoiceForm({ onClose }: { onClose: () => void }) {
         remarks: header.remarks || undefined,
         lines,
       },
-      { onSuccess: (inv) => router.push(`/invoices/${inv.id}`) },
+      { onSuccess: (inv) => router.push(`/invoices/view?id=${inv.id}`) },
     );
   }
 
@@ -437,7 +437,7 @@ export default function InvoicesPage() {
                     <td className="p-3">{formatMoney(inv.grand_total)}</td>
                     <td className="p-3 text-right">
                       <Link
-                        href={`/invoices/${inv.id}`}
+                        href={`/invoices/view?id=${inv.id}`}
                         className="font-medium text-primary hover:underline"
                       >
                         Open

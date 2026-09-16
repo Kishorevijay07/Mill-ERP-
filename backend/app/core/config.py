@@ -54,6 +54,10 @@ class Settings(BaseSettings):
     secret_key: str = Field(min_length=16)
     session_cookie_name: str = "rmerp_session"
     session_cookie_secure: bool = False
+    # "lax" for same-site dev; set "none" (with SESSION_COOKIE_SECURE=true) when
+    # the frontend and backend are on different domains (e.g. Cloudflare Pages +
+    # Render), so the browser sends the session cookie on cross-site requests.
+    session_cookie_samesite: Literal["lax", "strict", "none"] = "lax"
     session_ttl_seconds: int = 43_200
 
     # ---- PostgreSQL ----

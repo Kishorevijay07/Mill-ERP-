@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
-import { useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useRef, useState } from "react";
 import { useHasPermission } from "@/lib/auth";
 import { formatDate, formatMoney } from "@/lib/format";
 import {
@@ -24,9 +24,8 @@ function Detail({ label, value }: { label: string; value: string | null }) {
   );
 }
 
-export default function InvoiceDetailPage() {
-  const params = useParams<{ id: string }>();
-  const id = params.id;
+function InvoiceView() {
+  const id = useSearchParams().get("id") ?? "";
   const { data: inv, isLoading, isError } = useInvoice(id);
   const issue = useIssueInvoice(id);
   const uploadEway = useUploadEwayBill(id);
@@ -237,5 +236,19 @@ export default function InvoiceDetailPage() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+export default function InvoiceViewPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex justify-center py-12">
+          <Spinner className="h-8 w-8" />
+        </div>
+      }
+    >
+      <InvoiceView />
+    </Suspense>
   );
 }

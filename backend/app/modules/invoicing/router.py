@@ -280,11 +280,18 @@ def download_invoice_pdf(
     _user: User = Depends(require_permission(Permission.INVOICE_VIEW)),
 ) -> Response:
     invoice = service.get_invoice(db, invoice_id)
+    data: bytes | None = None
+    filename = f"tax-invoice-{invoice.invoice_number}.pdf"
     if invoice.pdf_document_id is not None:
-        document = documents_service.get_document(db, invoice.pdf_document_id)
-        data = documents_service.read_document_bytes(document)
-        filename = document.filename
-    else:
+        try:
+            document = documents_service.get_document(db, invoice.pdf_document_id)
+            data = documents_service.read_document_bytes(document)
+            filename = document.filename
+        except Exception:
+            # Stored file unavailable (e.g. ephemeral disk wiped on redeploy) —
+            # re-render on the fly. The invoice is immutable once issued.
+            data = None
+    if data is None:
         filename, data = service.render_pdf_bytes(db, invoice_id)
     return Response(
         content=data,

@@ -26,5 +26,6 @@ ENV PATH="/app/.venv/bin:$PATH"
 COPY . .
 USER appuser
 EXPOSE 8000
-# Liveness probe target: /health
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Apply DB migrations, then serve. Hosts (Render/Railway) inject $PORT; fall back
+# to 8000 for local `docker run`. Liveness/readiness probe targets: /health, /ready
+CMD ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]

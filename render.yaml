@@ -1,0 +1,39 @@
+# Render Blueprint — one-click backend deploy for Rice Mill ERP (invoice-only).
+#
+# Usage:  Render dashboard → New → Blueprint → connect this GitHub repo.
+# Render reads this file and creates the service. Two values are marked
+# `sync: false` (secrets / URL you fill in the dashboard):
+#   - DATABASE_URL       → your Neon connection string
+#   - CORS_ALLOW_ORIGINS → your Cloudflare Pages URL (e.g. https://xxx.pages.dev)
+#
+# The frontend deploys separately on Cloudflare Pages (static export from
+# /frontend). The Dockerfile runs `alembic upgrade head` on start, so DB
+# migrations apply automatically on every deploy. Free tier: no disk needed —
+# invoice PDFs and e-Way Bills are stored in the database.
+
+services:
+  - type: web
+    name: rice-mill-erp-api
+    runtime: docker
+    plan: free
+    region: ohio # co-located with the Neon DB (us-east-2) for low query latency
+    branch: main
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: SECRET_KEY
+        generateValue: true # Render generates a secure random value
+      - key: DATABASE_URL
+        sync: false # paste your Neon URL in the Render dashboard
+      - key: APP_ENV
+        value: production
+      - key: SESSION_COOKIE_SECURE
+        value: "true"
+      - key: SESSION_COOKIE_SAMESITE
+        value: "none" # cross-site cookie for Pages ↔ Render
+      - key: CORS_ALLOW_ORIGINS
+        sync: false # set to your Cloudflare Pages origin (no trailing slash)
+      - key: LOG_JSON
+        value: "true"

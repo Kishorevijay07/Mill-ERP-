@@ -24,6 +24,9 @@ RUN useradd --create-home --uid 10001 appuser
 COPY --from=deps /app/.venv /app/.venv
 ENV PATH="/app/.venv/bin:$PATH"
 COPY . .
+# Writable cache dir for generated PDFs (ephemeral is fine — invoice PDFs are
+# re-rendered from the database on demand, so no persistent disk is required).
+RUN mkdir -p /app/document_storage && chown -R appuser:appuser /app/document_storage
 USER appuser
 EXPOSE 8000
 # Apply DB migrations, then serve. Hosts (Render/Railway) inject $PORT; fall back

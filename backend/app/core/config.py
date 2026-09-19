@@ -86,8 +86,9 @@ class Settings(BaseSettings):
     s3_use_path_style: bool = True
 
     # ---- Document storage ----
-    # Backend for stored files: "local" (dev, on-disk) or "s3" (future).
-    document_storage_backend: str = "local"
+    # Where uploaded/generated file bytes live: "db" (default — persists in
+    # PostgreSQL, so no disk is needed on ephemeral hosts) or "local" (on-disk).
+    document_storage_backend: Literal["db", "local"] = "db"
     document_storage_dir: str = "./document_storage"
 
     # ---- Observability ----
